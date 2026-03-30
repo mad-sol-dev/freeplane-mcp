@@ -8,12 +8,12 @@ the Groovy HTTP Bridge. Requires Freeplane to be running with the bridge script.
 
 import os
 import json
-import requests
-from typing import Any, Optional, Dict, List
+import httpx
+from typing import Any, Dict
 
 # MCP imports
 from mcp.server import Server
-from mcp.types import Resource, Tool, TextContent
+from mcp.types import Tool, TextContent
 import mcp.server.stdio
 
 
@@ -31,33 +31,31 @@ class FreeplaneClient:
 
     def __init__(self, base_url: str = BRIDGE_URL):
         self.base_url = base_url
-        self.timeout = 10
+        self.timeout = 10.0
 
-    def check_connection(self) -> Dict:
+    async def check_connection(self) -> Dict:
         """Check if Freeplane bridge is running"""
         try:
-            response = requests.get(
-                f"{self.base_url}/status",
-                timeout=self.timeout
-            )
-            return response.json()
-        except requests.RequestException as e:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.get(f"{self.base_url}/status")
+                return response.json()
+        except httpx.HTTPError as e:
             return {
                 "error": "Cannot connect to Freeplane bridge",
                 "details": str(e),
                 "hint": "Make sure Freeplane is running and the FreeplaneHttpBridge.groovy script is executed"
             }
 
-    def execute(self, command: str, params: Optional[Dict] = None) -> Dict:
+    async def execute(self, command: str, params: Dict | None = None) -> Dict:
         """Execute a command on Freeplane"""
         try:
-            response = requests.post(
-                f"{self.base_url}/execute",
-                json={"command": command, "params": params or {}},
-                timeout=self.timeout
-            )
-            return response.json()
-        except requests.RequestException as e:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.post(
+                    f"{self.base_url}/execute",
+                    json={"command": command, "params": params or {}},
+                )
+                return response.json()
+        except httpx.HTTPError as e:
             return {"error": str(e)}
 
 
@@ -376,7 +374,7 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
     try:
         # Special case: check connection doesn't need bridge call
         if name == "check_connection":
-            result = freeplane.check_connection()
+            result = await freeplane.check_connection()
             return [TextContent(type="text", text=json.dumps(result, indent=2))]
 
         # Map tool names to commands
@@ -412,21 +410,21 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
         if name == "set_font_formatting":
             results = []
             if "bold" in arguments:
-                res = freeplane.execute("set_font_bold", {
+                res = await freeplane.execute("set_font_bold", {
                     "node_id": arguments.get("node_id"),
                     "bold": arguments["bold"]
                 })
                 results.append(res)
 
             if "italic" in arguments:
-                res = freeplane.execute("set_font_italic", {
+                res = await freeplane.execute("set_font_italic", {
                     "node_id": arguments.get("node_id"),
                     "italic": arguments["italic"]
                 })
                 results.append(res)
 
             if "size" in arguments:
-                res = freeplane.execute("set_font_size", {
+                res = await freeplane.execute("set_font_size", {
                     "node_id": arguments.get("node_id"),
                     "size": arguments["size"]
                 })
@@ -444,7 +442,7 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
                 "error": f"Unknown tool: {name}"
             }, indent=2))]
 
-        result = freeplane.execute(command, arguments)
+        result = await freeplane.execute(command, arguments)
         return [TextContent(type="text", text=json.dumps(result, indent=2))]
 
     except Exception as e:

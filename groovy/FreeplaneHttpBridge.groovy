@@ -19,28 +19,45 @@ import com.sun.net.httpserver.*
 import groovy.json.JsonBuilder
 import groovy.json.JsonSlurper
 import java.awt.Color
+import javax.swing.SwingUtilities
+import java.util.concurrent.atomic.AtomicReference
 
 // Configuration
 final int PORT = 8765
 final String HOST = "localhost"
 
-// Global server reference
-def httpServer = null
+// Global server reference (use binding so re-runs can find the previous instance)
+if (!binding.hasVariable('_fpBridgeServer')) {
+    binding._fpBridgeServer = null
+}
 
 // Start the HTTP server
 def startServer() {
+    // Stop previous instance if still running
+    if (binding._fpBridgeServer != null) {
+        try {
+            binding._fpBridgeServer.stop(0)
+            c.statusInfo = "HTTP Bridge: stopped previous instance"
+        } catch (Exception ignore) {}
+        binding._fpBridgeServer = null
+    }
+
     try {
-        httpServer = HttpServer.create(new InetSocketAddress(HOST, PORT), 0)
+        def httpServer = HttpServer.create(new InetSocketAddress(HOST, PORT), 0)
 
         // Status endpoint
         httpServer.createContext("/status") { HttpExchange http ->
             handleRequest(http) {
-                [
-                    status: "running",
-                    freeplane_version: c.freeplaneVersion,
-                    map_title: node.map.root.text,
-                    current_node: node.id
-                ]
+                def resultRef = new AtomicReference()
+                SwingUtilities.invokeAndWait {
+                    resultRef.set([
+                        status: "running",
+                        freeplane_version: c.freeplaneVersion,
+                        map_title: node.map.root.text,
+                        current_node: node.id
+                    ])
+                }
+                resultRef.get()
             }
         }
 
@@ -55,7 +72,20 @@ def startServer() {
                 def command = json.command
                 def params = json.params ?: [:]
 
-                executeCommand(command, params)
+                // Freeplane API is Swing-based — must run on Event Dispatch Thread
+                def resultRef = new AtomicReference()
+                def errorRef = new AtomicReference()
+                SwingUtilities.invokeAndWait {
+                    try {
+                        resultRef.set(executeCommand(command, params))
+                    } catch (Exception edtEx) {
+                        errorRef.set(edtEx)
+                    }
+                }
+                if (errorRef.get()) {
+                    throw errorRef.get()
+                }
+                resultRef.get()
             }
         }
 
@@ -68,6 +98,7 @@ def startServer() {
         }
 
         httpServer.start()
+        binding._fpBridgeServer = httpServer
 
         ui.informationMessage("""
 Freeplane HTTP Bridge Server Started!
@@ -87,9 +118,9 @@ The server is now accepting commands from external programs.
 
 // Stop the server
 def stopServer() {
-    if (httpServer) {
-        httpServer.stop(0)
-        httpServer = null
+    if (binding._fpBridgeServer) {
+        binding._fpBridgeServer.stop(0)
+        binding._fpBridgeServer = null
         c.statusInfo = "HTTP Bridge stopped"
         ui.informationMessage("HTTP Bridge Server Stopped")
     }
@@ -101,17 +132,9 @@ def handleRequest(HttpExchange http, Closure action) {
     def statusCode = 200
 
     try {
-        // Set CORS headers
-        http.responseHeaders.add("Access-Control-Allow-Origin", "*")
-        http.responseHeaders.add("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        http.responseHeaders.add("Access-Control-Allow-Headers", "Content-Type")
+        // No CORS headers — bridge is localhost-only, accessed by local MCP server.
+        // Browser-based cross-origin requests are intentionally blocked.
         http.responseHeaders.add("Content-Type", "application/json")
-
-        // Handle preflight
-        if (http.requestMethod == "OPTIONS") {
-            http.sendResponseHeaders(200, -1)
-            return
-        }
 
         def result = action()
 
@@ -513,15 +536,12 @@ def unfoldNode(nodeId) {
 }
 
 def findNodes(searchText, caseSensitive) {
-    def results = []
     def search = caseSensitive ? searchText : searchText.toLowerCase()
 
-    node.map.root.find { n ->
-        def nodeText = caseSensitive ? n.text : n.text.toLowerCase()
-        if (nodeText.contains(search)) {
-            results << getNodeInfo(n)
-        }
-    }
+    def results = node.map.root.findAll().findAll { n ->
+        def nodeText = caseSensitive ? n.text : n.text?.toLowerCase() ?: ""
+        nodeText.contains(search)
+    }.collect { getNodeInfo(it) }
 
     return [results: results, count: results.size()]
 }
@@ -549,7 +569,7 @@ def getNodeInfo(n) {
 }
 
 def countAllNodes(n) {
-    return 1 + n.children.sum { countAllNodes(it) } ?: 0
+    return 1 + (n.children.collect { countAllNodes(it) }.sum(0))
 }
 
 def parseColor(colorStr) {
