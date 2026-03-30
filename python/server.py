@@ -328,6 +328,72 @@ async def list_tools() -> list[Tool]:
                 }
             }
         ),
+        Tool(
+            name="get_link",
+            description="Get the link (URL, file path, or node reference) from a node",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "node_id": {"type": "string", "description": "Node ID (omit for current)"}
+                }
+            }
+        ),
+        Tool(
+            name="set_link",
+            description="Set a link on a node. Target can be a URL (https://...), file path, or node ID (ID_xxx for inter-node link)",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "node_id": {"type": "string", "description": "Node ID (omit for current)"},
+                    "target": {"type": "string", "description": "URL, file path, or node ID (ID_xxx)"}
+                },
+                "required": ["target"]
+            }
+        ),
+        Tool(
+            name="remove_link",
+            description="Remove the link from a node",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "node_id": {"type": "string", "description": "Node ID (omit for current)"}
+                }
+            }
+        ),
+        Tool(
+            name="get_details",
+            description="Get the details text (secondary text shown below node text) of a node",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "node_id": {"type": "string", "description": "Node ID (omit for current)"}
+                }
+            }
+        ),
+        Tool(
+            name="set_details",
+            description="Set or clear the details text of a node. Details appear below the main node text — ideal for supplementary info. Pass null/empty to clear.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "node_id": {"type": "string", "description": "Node ID (omit for current)"},
+                    "text": {"type": "string", "description": "Details text (supports HTML). Omit or null to clear."}
+                }
+            }
+        ),
+        Tool(
+            name="move_node",
+            description="Move a node to a different parent. Optionally specify position among siblings.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "node_id": {"type": "string", "description": "ID of the node to move"},
+                    "target_parent_id": {"type": "string", "description": "ID of the new parent node"},
+                    "position": {"type": "integer", "description": "Position among siblings (0-based). Omit to append as last child."}
+                },
+                "required": ["node_id", "target_parent_id"]
+            }
+        ),
 
         # Map Operations
         Tool(
@@ -427,6 +493,12 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
             "get_node_attributes": "get_attributes",
             "set_node_note": "set_note",
             "get_node_note": "get_note",
+            "get_link": "get_link",
+            "set_link": "set_link",
+            "remove_link": "remove_link",
+            "get_details": "get_details",
+            "set_details": "set_details",
+            "move_node": "move_node",
             "fold_node": "fold_node",
             "unfold_node": "unfold_node",
             "center_on_node": "center_on_node",

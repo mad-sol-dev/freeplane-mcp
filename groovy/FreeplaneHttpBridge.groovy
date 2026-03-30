@@ -271,6 +271,24 @@ def executeCommand(String command, Map params) {
         case "bulk_create":
             return bulkCreate(params.node_id, params.outline)
 
+        case "get_link":
+            return getLink(params.node_id)
+
+        case "set_link":
+            return setLink(params.node_id, params.target)
+
+        case "remove_link":
+            return removeLink(params.node_id)
+
+        case "get_details":
+            return getDetails(params.node_id)
+
+        case "set_details":
+            return setDetails(params.node_id, params.text)
+
+        case "move_node":
+            return moveNode(params.node_id, params.target_parent_id, params.position)
+
         // Search
         case "find_nodes":
             return findNodes(params.text, params.case_sensitive)
@@ -627,6 +645,101 @@ def bulkCreate(nodeId, outline) {
     ]
 }
 
+def getLink(nodeId) {
+    def targetNode = nodeId ? findNodeById(nodeId) : node
+    if (!targetNode) {
+        return [error: "Node not found: ${nodeId}"]
+    }
+    return [
+        text: targetNode.link?.text,
+        uri: targetNode.link?.uri?.toString(),
+        node_id: targetNode.link?.node?.id
+    ]
+}
+
+def setLink(nodeId, target) {
+    def targetNode = nodeId ? findNodeById(nodeId) : node
+    if (!targetNode) {
+        return [error: "Node not found: ${nodeId}"]
+    }
+    if (!target) {
+        return [error: "Link target is required"]
+    }
+
+    if (target.startsWith("ID_")) {
+        def linkedNode = findNodeById(target)
+        if (!linkedNode) {
+            return [error: "Target node not found: ${target}"]
+        }
+        targetNode.link.node = linkedNode
+    } else {
+        targetNode.link.text = target
+    }
+    return [success: true]
+}
+
+def removeLink(nodeId) {
+    def targetNode = nodeId ? findNodeById(nodeId) : node
+    if (!targetNode) {
+        return [error: "Node not found: ${nodeId}"]
+    }
+    targetNode.link.remove()
+    return [success: true]
+}
+
+def getDetails(nodeId) {
+    def targetNode = nodeId ? findNodeById(nodeId) : node
+    if (!targetNode) {
+        return [error: "Node not found: ${nodeId}"]
+    }
+    return [
+        details: targetNode.details?.text ?: "",
+        details_content_type: targetNode.detailsContentType
+    ]
+}
+
+def setDetails(nodeId, text) {
+    def targetNode = nodeId ? findNodeById(nodeId) : node
+    if (!targetNode) {
+        return [error: "Node not found: ${nodeId}"]
+    }
+    targetNode.details = text
+    return [success: true]
+}
+
+def moveNode(nodeId, targetParentId, position) {
+    if (!nodeId) {
+        return [error: "node_id is required"]
+    }
+    if (!targetParentId) {
+        return [error: "target_parent_id is required"]
+    }
+
+    def sourceNode = findNodeById(nodeId)
+    def targetParent = findNodeById(targetParentId)
+
+    if (!sourceNode) {
+        return [error: "Source node not found: ${nodeId}"]
+    }
+    if (!targetParent) {
+        return [error: "Target parent not found: ${targetParentId}"]
+    }
+    if (sourceNode.isRoot()) {
+        return [error: "Cannot move root node"]
+    }
+    if (targetParent.isDescendantOf(sourceNode)) {
+        return [error: "Cannot move node into its own subtree"]
+    }
+
+    if (position != null) {
+        sourceNode.moveTo(targetParent, position as int)
+    } else {
+        sourceNode.moveTo(targetParent)
+    }
+
+    return [success: true, node: getNodeInfo(sourceNode)]
+}
+
 // Utility Functions
 
 def findNodeById(nodeId) {
@@ -689,6 +802,9 @@ def getAvailableCommands() {
         "set_note", "get_note",
         "get_map_info", "center_on_node", "fold_node", "unfold_node",
         "get_subtree", "bulk_create",
+        "get_link", "set_link", "remove_link",
+        "get_details", "set_details",
+        "move_node",
         "find_nodes"
     ]
 }
