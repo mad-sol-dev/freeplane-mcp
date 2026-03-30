@@ -289,6 +289,33 @@ def executeCommand(String command, Map params) {
         case "move_node":
             return moveNode(params.node_id, params.target_parent_id, params.position)
 
+        case "save_map":
+            return saveMap()
+
+        case "undo":
+            return doUndo()
+
+        case "redo":
+            return doRedo()
+
+        case "sort_children":
+            return sortChildren(params.node_id, params.reverse)
+
+        case "set_font_name":
+            return setFontName(params.node_id, params.name)
+
+        case "set_cloud":
+            return setCloud(params.node_id, params.color, params.shape)
+
+        case "remove_cloud":
+            return removeCloud(params.node_id)
+
+        case "set_alias":
+            return setAlias(params.node_id, params.alias)
+
+        case "get_alias":
+            return getAlias(params.node_id)
+
         // Search
         case "find_nodes":
             return findNodes(params.text, params.case_sensitive)
@@ -740,6 +767,105 @@ def moveNode(nodeId, targetParentId, position) {
     return [success: true, node: getNodeInfo(sourceNode)]
 }
 
+def saveMap() {
+    def map = node.map
+    if (!map.file) {
+        return [error: "Map has no file path (never saved). Use Freeplane UI to save first."]
+    }
+    def saved = map.save(false)
+    return [success: saved, file: map.file?.path]
+}
+
+def doUndo() {
+    try {
+        c.undo()
+        return [success: true]
+    } catch (Exception e) {
+        return [error: "Nothing to undo or undo failed: ${e.message}"]
+    }
+}
+
+def doRedo() {
+    try {
+        c.redo()
+        return [success: true]
+    } catch (Exception e) {
+        return [error: "Nothing to redo or redo failed: ${e.message}"]
+    }
+}
+
+def sortChildren(nodeId, reverse) {
+    def targetNode = nodeId ? findNodeById(nodeId) : node
+    if (!targetNode) {
+        return [error: "Node not found: ${nodeId}"]
+    }
+    if (targetNode.children.size() == 0) {
+        return [error: "Node has no children to sort"]
+    }
+
+    targetNode.sortChildrenBy { it.text?.toLowerCase() ?: "" }
+
+    if (reverse) {
+        def children = targetNode.children.collect { it }
+        children.each { child ->
+            child.moveTo(targetNode, 0)
+        }
+    }
+
+    return [success: true, child_count: targetNode.children.size()]
+}
+
+def setFontName(nodeId, fontName) {
+    def targetNode = nodeId ? findNodeById(nodeId) : node
+    if (!targetNode) {
+        return [error: "Node not found: ${nodeId}"]
+    }
+    targetNode.style.font.name = fontName
+    return [success: true]
+}
+
+def setCloud(nodeId, colorStr, shape) {
+    def targetNode = nodeId ? findNodeById(nodeId) : node
+    if (!targetNode) {
+        return [error: "Node not found: ${nodeId}"]
+    }
+
+    targetNode.cloud.enabled = true
+    if (colorStr) {
+        targetNode.cloud.colorCode = colorStr
+    }
+    if (shape) {
+        targetNode.cloud.shape = shape
+    }
+    return [success: true]
+}
+
+def removeCloud(nodeId) {
+    def targetNode = nodeId ? findNodeById(nodeId) : node
+    if (!targetNode) {
+        return [error: "Node not found: ${nodeId}"]
+    }
+    targetNode.cloud.enabled = false
+    return [success: true]
+}
+
+def setAlias(nodeId, alias) {
+    def targetNode = nodeId ? findNodeById(nodeId) : node
+    if (!targetNode) {
+        return [error: "Node not found: ${nodeId}"]
+    }
+    targetNode.alias = alias ?: ""
+    return [success: true]
+}
+
+def getAlias(nodeId) {
+    def targetNode = nodeId ? findNodeById(nodeId) : node
+    if (!targetNode) {
+        return [error: "Node not found: ${nodeId}"]
+    }
+    return [alias: targetNode.alias ?: ""]
+}
+
 // Utility Functions
 
 def findNodeById(nodeId) {
@@ -805,6 +931,11 @@ def getAvailableCommands() {
         "get_link", "set_link", "remove_link",
         "get_details", "set_details",
         "move_node",
+        "save_map", "undo", "redo",
+        "sort_children",
+        "set_font_name",
+        "set_cloud", "remove_cloud",
+        "set_alias", "get_alias",
         "find_nodes"
     ]
 }

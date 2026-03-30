@@ -221,6 +221,40 @@ async def list_tools() -> list[Tool]:
                 }
             }
         ),
+        Tool(
+            name="set_font_name",
+            description="Set the font family of a node (e.g., 'Arial', 'Courier New', 'SansSerif')",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "node_id": {"type": "string", "description": "Node ID (omit for current)"},
+                    "name": {"type": "string", "description": "Font family name"}
+                },
+                "required": ["name"]
+            }
+        ),
+        Tool(
+            name="set_cloud",
+            description="Add a cloud (visual grouping) around a node and its children",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "node_id": {"type": "string", "description": "Node ID (omit for current)"},
+                    "color": {"type": "string", "description": "Cloud color as hex code (e.g., '#3399ff')"},
+                    "shape": {"type": "string", "description": "Cloud shape", "enum": ["ARC", "STAR", "RECT", "ROUND_RECT"]}
+                }
+            }
+        ),
+        Tool(
+            name="remove_cloud",
+            description="Remove the cloud from a node",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "node_id": {"type": "string", "description": "Node ID (omit for current)"}
+                }
+            }
+        ),
 
         # Icons
         Tool(
@@ -394,8 +428,56 @@ async def list_tools() -> list[Tool]:
                 "required": ["node_id", "target_parent_id"]
             }
         ),
+        Tool(
+            name="set_alias",
+            description="Set or clear a node's alias. Aliases enable path-based addressing (node.at('~aliasName')). Pass empty string to clear.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "node_id": {"type": "string", "description": "Node ID (omit for current)"},
+                    "alias": {"type": "string", "description": "Alias string (empty to clear)"}
+                },
+                "required": ["alias"]
+            }
+        ),
+        Tool(
+            name="get_alias",
+            description="Get a node's alias",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "node_id": {"type": "string", "description": "Node ID (omit for current)"}
+                }
+            }
+        ),
 
         # Map Operations
+        Tool(
+            name="save_map",
+            description="Save the current mind map to disk. Map must have been saved at least once before (has a file path).",
+            inputSchema={"type": "object", "properties": {}}
+        ),
+        Tool(
+            name="undo",
+            description="Undo the last operation in Freeplane. Use as safety net after modifications.",
+            inputSchema={"type": "object", "properties": {}}
+        ),
+        Tool(
+            name="redo",
+            description="Redo the last undone operation in Freeplane.",
+            inputSchema={"type": "object", "properties": {}}
+        ),
+        Tool(
+            name="sort_children",
+            description="Sort child nodes of a node alphabetically by text.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "node_id": {"type": "string", "description": "Node whose children to sort (omit for current)"},
+                    "reverse": {"type": "boolean", "description": "Sort in reverse (Z-A) order", "default": False}
+                }
+            }
+        ),
         Tool(
             name="fold_node",
             description="Fold (collapse) a node to hide its children",
@@ -499,6 +581,15 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
             "get_details": "get_details",
             "set_details": "set_details",
             "move_node": "move_node",
+            "set_alias": "set_alias",
+            "get_alias": "get_alias",
+            "save_map": "save_map",
+            "undo": "undo",
+            "redo": "redo",
+            "sort_children": "sort_children",
+            "set_font_name": "set_font_name",
+            "set_cloud": "set_cloud",
+            "remove_cloud": "remove_cloud",
             "fold_node": "fold_node",
             "unfold_node": "unfold_node",
             "center_on_node": "center_on_node",
