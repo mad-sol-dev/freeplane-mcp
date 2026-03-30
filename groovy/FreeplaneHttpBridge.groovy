@@ -259,6 +259,18 @@ def executeCommand(String command, Map params) {
         case "unfold_node":
             return unfoldNode(params.node_id)
 
+        case "get_subtree":
+            return getSubtree(
+                params.node_id,
+                params.max_depth,
+                params.include_details,
+                params.include_notes,
+                params.include_attributes
+            )
+
+        case "bulk_create":
+            return bulkCreate(params.node_id, params.outline)
+
         // Search
         case "find_nodes":
             return findNodes(params.text, params.case_sensitive)
@@ -546,6 +558,75 @@ def findNodes(searchText, caseSensitive) {
     return [results: results, count: results.size()]
 }
 
+def getSubtree(nodeId, maxDepth, includeDetails, includeNotes, includeAttributes) {
+    def targetNode = nodeId ? findNodeById(nodeId) : node
+    if (!targetNode) {
+        return [error: "Node not found: ${nodeId}"]
+    }
+    def depthLimit = (maxDepth != null) ? (maxDepth as int) : -1
+    return buildSubtree(
+        targetNode,
+        depthLimit,
+        0,
+        includeDetails ?: false,
+        includeNotes ?: false,
+        includeAttributes ?: false
+    )
+}
+
+def buildSubtree(n, maxDepth, currentDepth, includeDetails, includeNotes, includeAttributes) {
+    def result = [
+        id: n.id,
+        text: n.text,
+        child_count: n.children.size(),
+        is_folded: n.folded,
+        icons: n.icons.icons*.toString(),
+        link: n.link?.text
+    ]
+
+    if (includeDetails) {
+        result.details = n.details?.text ?: ""
+    }
+    if (includeNotes) {
+        result.note = n.note?.text ?: ""
+    }
+    if (includeAttributes) {
+        def attrs = [:]
+        n.attributes.each { attrs[it.name] = it.value }
+        result.attributes = attrs
+    }
+
+    if (includeDetails || includeNotes || includeAttributes) {
+        result.style = n.style.name
+        result.text_color = colorToHex(n.style.textColor)
+        result.background_color = colorToHex(n.style.backgroundColor)
+    }
+
+    if (maxDepth < 0 || currentDepth < maxDepth) {
+        result.children = n.children.collect {
+            buildSubtree(it, maxDepth, currentDepth + 1, includeDetails, includeNotes, includeAttributes)
+        }
+    }
+
+    return result
+}
+
+def bulkCreate(nodeId, outline) {
+    def targetNode = nodeId ? findNodeById(nodeId) : node
+    if (!targetNode) {
+        return [error: "Node not found: ${nodeId}"]
+    }
+    if (!outline?.trim()) {
+        return [error: "Outline text is required"]
+    }
+    targetNode.appendTextOutlineAsBranch(outline)
+    return [
+        success: true,
+        parent_id: targetNode.id,
+        child_count: targetNode.children.size()
+    ]
+}
+
 // Utility Functions
 
 def findNodeById(nodeId) {
@@ -607,6 +688,7 @@ def getAvailableCommands() {
         "set_attribute", "get_attributes", "remove_attribute",
         "set_note", "get_note",
         "get_map_info", "center_on_node", "fold_node", "unfold_node",
+        "get_subtree", "bulk_create",
         "find_nodes"
     ]
 }

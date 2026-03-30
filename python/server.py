@@ -136,6 +136,18 @@ async def list_tools() -> list[Tool]:
             }
         ),
         Tool(
+            name="bulk_create_from_outline",
+            description="Create an entire branch hierarchy from a tab-indented text outline in a single operation. Much faster than creating nodes one by one. Each line becomes a node; tab indentation sets depth.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "node_id": {"type": "string", "description": "Parent node ID (omit for current selection)"},
+                    "outline": {"type": "string", "description": "Tab-indented text outline. Each line = node, tabs = depth level."}
+                },
+                "required": ["outline"]
+            }
+        ),
+        Tool(
             name="set_node_text",
             description="Change the text of a node",
             inputSchema={
@@ -351,6 +363,20 @@ async def list_tools() -> list[Tool]:
                 "required": ["node_id"]
             }
         ),
+        Tool(
+            name="get_subtree",
+            description="Get the full subtree structure starting from a node as nested JSON. Essential for understanding map structure. Returns id, text, children recursively. Use max_depth to limit depth for large maps.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "node_id": {"type": "string", "description": "Starting node ID (omit for current selection)"},
+                    "max_depth": {"type": "integer", "description": "Max recursion depth (-1 for unlimited)", "default": -1},
+                    "include_details": {"type": "boolean", "description": "Include node details text", "default": False},
+                    "include_notes": {"type": "boolean", "description": "Include node notes", "default": False},
+                    "include_attributes": {"type": "boolean", "description": "Include node attributes", "default": False}
+                }
+            }
+        ),
 
         # Search
         Tool(
@@ -386,6 +412,7 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
             "navigate_to_child": "navigate_to_child",
             "create_child_node": "create_child",
             "create_sibling_node": "create_sibling",
+            "bulk_create_from_outline": "bulk_create",
             "set_node_text": "set_node_text",
             "delete_node": "delete_node",
             "set_node_color": "set_node_color",
@@ -403,6 +430,7 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
             "fold_node": "fold_node",
             "unfold_node": "unfold_node",
             "center_on_node": "center_on_node",
+            "get_subtree": "get_subtree",
             "find_nodes": "find_nodes"
         }
 
